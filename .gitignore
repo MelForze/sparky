@@ -4,6 +4,12 @@
 !yarn
 !README.md
 !requirements.txt
+!Dockerfile
+!.dockerignore
+!docker-entrypoint.sh
+!docker-compose*.yml
+!docker
+!docker/**
 !tests
 !res
 !res/*.jar

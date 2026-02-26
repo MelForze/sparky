@@ -127,6 +127,85 @@ python sparky.py <spark_ip> <computer_ip> -i
 python -m pip install pyspark==2.4.3
 ``` 
 
+### Docker
+This repository now includes a `Dockerfile` that packages a Java 8 runtime and a Python 3.7 environment compatible with Spark 2.4.x (default `pyspark==2.4.8`).
+
+Build the image:
+```sh
+docker build -t sparky .
+```
+
+Run Sparky (default entrypoint executes `sparky.py`):
+```sh
+docker run --rm -it --network host sparky 192.168.1.30:7077 192.168.1.22 -i
+```
+
+Run the bruteforce helper (`fireSparky.py`):
+```sh
+docker run --rm -it --network host -v "$PWD:/data" sparky fireSparky 192.168.1.30:7077 /data/wordlist.txt
+```
+
+Notes:
+* `--network host` is the easiest way to keep full support for command execution features because Spark workers must be able to connect back to the driver on the ports used by Sparky (default `8080` and `8443`).
+* If you cannot use host networking, publish the ports manually (for example `-p 8080:8080 -p 8443:8443`) and pass a `driver_ip` that is reachable from Spark workers.
+* The image entrypoint also supports shell access (`docker run --rm -it sparky bash`).
+* If you must match a specific cluster patch version, update the `pyspark` pin in `Dockerfile` before building.
+
+### Docker Compose test lab (local Spark Standalone)
+For local testing, the repository includes `docker-compose.lab.yml` with:
+* `spark-master` (Standalone master, REST API enabled)
+* `spark-worker` (worker node)
+
+The lab builds a local Spark 2.4.8 image (`docker/spark24-lab/Dockerfile`) so it works on both x86_64 and ARM hosts without relying on deprecated Docker Hub tags.
+
+Start the lab:
+```sh
+docker compose -f docker-compose.lab.yml up -d --build --wait
+```
+If your Docker Compose version does not support `--wait`, use:
+```sh
+docker compose -f docker-compose.lab.yml up -d --build
+docker compose -f docker-compose.lab.yml ps
+```
+
+Run Sparky from inside the same Docker network (recommended for command execution features):
+```sh
+docker build -t sparky .
+docker run --rm -it --network sparky-lab --name sparky-cli \
+  sparky spark-master:7077 sparky-cli -i
+
+docker run --rm -it --network sparky-lab --name sparky-cli \
+  sparky spark-master:7077 sparky-cli -c "id" -n 1 -P python3
+```
+
+Run the bruteforce helper:
+```sh
+docker run --rm -it --network sparky-lab -v "$PWD:/data" \
+  sparky fireSparky spark-master:7077 /data/path/to/wordlist.txt
+```
+
+Useful checks:
+```sh
+docker compose -f docker-compose.lab.yml logs -f spark-master spark-worker
+docker compose -f docker-compose.lab.yml ps
+```
+
+Stop and cleanup:
+```sh
+docker compose -f docker-compose.lab.yml down -v
+```
+
+Host-exposed ports of the lab:
+* `17077` -> Spark master RPC (`7077` in container)
+* `16066` -> Spark REST API (`6066` in container)
+* `18080` -> Spark master Web UI (`8080` in container)
+
+Notes:
+* The `driver_ip` argument in the examples is `sparky-cli` (the container name from `docker run --name sparky-cli`), which makes Spark workers connect back to the Sparky container correctly.
+* `-P python3` is recommended in this lab so the Python version used by Sparky matches the Python available in the Spark worker container.
+* On ARM Macs/Linux hosts this avoids `amd64` Spark images under QEMU emulation, which can lead to a master process that starts but never opens port `7077`.
+* If you run `Sparky` outside the `sparky-lab` Docker network, publish its callback ports (`-p 8080:8080 -p 8443:8443`) and pass a `driver_ip` reachable from Spark workers.
+
 ### Python Environment
 The version of Python used to execute Sparky must match the default version of Python on the Worker node. Otherwise you will get the following exception:
 ```

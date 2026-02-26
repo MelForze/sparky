@@ -142,8 +142,10 @@ def getNumber(input):
 
 def getListWorks(doc):
     workerList = PrettyTable(["Executor IP", "Executor port", "State", "Cores", "Memory"])
-    # raw_list = doc.xpath('//div[contains(@class, "aggregated-workers")]/table//tr')
-    raw_list = doc.xpath('//div[h4[contains(text(),"Workers")]]/table/tbody//tr')
+    # Spark master UI markup differs slightly across 2.4.x builds (tbody may be omitted).
+    raw_list = doc.xpath('//div[contains(@class, "aggregated-workers")]//table//tr[td]')
+    if len(raw_list) < 1:
+        raw_list = doc.xpath('//div[h4[contains(text(),"Workers")]]/table//tr[td]')
     if len(raw_list) < 1:
         return workerList
     for raw_tr in raw_list:
